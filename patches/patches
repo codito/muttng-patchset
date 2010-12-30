@@ -1,0 +1,101 @@
+../muttng-patchset/patchese@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/patchlist.Po@am__quote@
+Index: mutt-1.5.18/configure
+===================================================================
+--- mutt-1.5.18.orig/configure	2008-04-20 05:08:53.000000000 +0200
++++ mutt-1.5.18/configure	2008-05-18 23:42:31.000000000 +0200
+@@ -1475,6 +1475,7 @@
+                           Force use of an external dotlock program
+   --enable-pop            Enable POP3 support
+   --enable-imap           Enable IMAP support
++  --enable-nntp           Enable NNTP support
+   --enable-smtp           include internal SMTP relay support
+   --enable-debug          Enable debugging support
+   --enable-flock          Use flock() to lock files
+@@ -13965,6 +13966,20 @@
+ fi
+ done
+ 
++# Check whether --enable-nntp or --disable-nntp was given.
++if test "${enable_nntp+set}" = set; then
++  enableval="$enable_nntp"
++  	if test x$enableval = xyes ; then
++		cat >>confdefs.h <<\_ACEOF
++#define USE_NNTP 1
++_ACEOF
++
++		MUTT_LIB_OBJECTS="$MUTT_LIB_OBJECTS nntp.o newsrc.o"
++		need_socket="yes"
++	fi
++
++fi;
++
+ 
+ 
+ for ac_func in strftime
+6:53.000000000 +0100
++++ mutt-1.5.18/url.c	2008-05-18 23:42:31.000000000 +0200
+@@ -39,6 +39,8 @@
+   { "imaps", 	U_IMAPS },
+   { "pop",  	U_POP },
+   { "pops", 	U_POPS },
++  { "news",	U_NNTP },
++  { "newss",	U_NNTPS },
+   { "mailto",	U_MAILTO },
+   { "smtp",     U_SMTP },
+   { "smtps",    U_SMTPS },
+Index: mutt-1.5.18/url.h
+===================================================================
+--- mutt-1.5.18.orig/url.h	2008-01-30 05:26:53.000000000 +0100
++++ mutt-1.5.18/url.h	2008-05-18 23:42:31.000000000 +0200
+@@ -8,6 +8,8 @@
+   U_POPS,
+   U_IMAP,
+   U_IMAPS,
++  U_NNTP,
++  U_NNTPS,
+   U_SMTP,
+   U_SMTPS,
+   U_MAILTO,
+Index: mutt-1.5.18/Makefile.am
+===================================================================
+--- mutt-1.5.18.orig/Makefile.am	2008-05-17 20:04:24.000000000 +0200
++++ mutt-1.5.18/Makefile.am	2008-05-18 23:42:31.000000000 +0200
+@@ -53,6 +53,7 @@
+ 	smtp.c browser.h mbyte.h remailer.h url.h \
+ 	crypt-mod-pgp-classic.c crypt-mod-smime-classic.c \
+ 	pgppacket.c mutt_idna.h hcache.h hcache.c bcache.c bcache.h mutt_ssl_gnutls.c \
++	nntp.c newsrc.c \
+ 	crypt-gpgme.c crypt-mod-pgp-gpgme.c crypt-mod-smime-gpgme.c \
+ 	utf8.c wcwidth.c 
+ 
+@@ -64,6 +65,7 @@
+ 	mutt_regex.h mutt_sasl.h mutt_socket.h mutt_ssl.h mutt_tunnel.h \
+ 	mx.h pager.h pgp.h pop.h protos.h rfc1524.h rfc2047.h \
+ 	rfc2231.h rfc822.h rfc3676.h sha1.h sort.h mime.types VERSION prepare \
++	nntp.h ChangeLog.nntp \
+ 	_regex.h OPS.MIX README.SECURITY remailer.c remailer.h browser.h \
+ 	mbyte.h lib.h extlib.c pgpewrap.c smime_keys.pl pgplib.h \
+ 	README.SSL smime.h \
+Index: mutt-1.5.18/Makefile.in
+===================================================================
+--- mutt-1.5.18.orig/Makefile.in	2008-05-17 20:04:33.000000000 +0200
++++ mutt-1.5.18/Makefile.in	2008-05-18 23:42:31.000000000 +0200
+@@ -319,6 +319,7 @@
+ 	smtp.c browser.h mbyte.h remailer.h url.h \
+ 	crypt-mod-pgp-classic.c crypt-mod-smime-classic.c \
+ 	pgppacket.c mutt_idna.h hcache.h hcache.c bcache.c bcache.h mutt_ssl_gnutls.c \
++	nntp.c newsrc.c \
+ 	crypt-gpgme.c crypt-mod-pgp-gpgme.c crypt-mod-smime-gpgme.c \
+ 	utf8.c wcwidth.c 
+ 
+@@ -330,6 +331,7 @@
+ 	mutt_regex.h mutt_sasl.h mutt_socket.h mutt_ssl.h mutt_tunnel.h \
+ 	mx.h pager.h pgp.h pop.h protos.h rfc1524.h rfc2047.h \
+ 	rfc2231.h rfc822.h rfc3676.h sha1.h sort.h mime.types VERSION prepare \
++	nntp.h ChangeLog.nntp \
+ 	_regex.h OPS.MIX README.SECURITY remailer.c remailer.h browser.h \
+ 	mbyte.h lib.h extlib.c pgpewrap.c smime_keys.pl pgplib.h \
+ 	README.SSL smime.h \
+@@ -540,6 +542,8 @@
+ @AMDEP_TRUE@@am__inclž

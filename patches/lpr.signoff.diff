@@ -1,0 +1,53 @@
+Index: mutt-1.5.18/PATCHES
+===================================================================
+--- mutt-1.5.18.orig/PATCHES	2008-05-18 23:44:54.000000000 +0200
++++ mutt-1.5.18/PATCHES	2008-05-18 23:45:00.000000000 +0200
+@@ -1,3 +1,4 @@
++patch-1.5.4.lpr.signoff Lukas P. Ruf <lukas.ruf@lpr.ch>
+ patch-1.5.4.lpr.signin Lukas P. Ruf <lukas.ruf@lpr.ch>
+ patch-1.5.13.debian.compressed.2
+ patch-1.5.13.cd.source_multiple.2
+Index: mutt-1.5.18/globals.h
+===================================================================
+--- mutt-1.5.18.orig/globals.h	2008-05-18 23:44:54.000000000 +0200
++++ mutt-1.5.18/globals.h	2008-05-18 23:45:00.000000000 +0200
+@@ -127,6 +127,7 @@
+ WHERE char *Shell;
+ WHERE char *Signin;
+ WHERE char *Signature;
++WHERE char *Signoff;
+ WHERE char *SimpleSearch;
+ #if USE_SMTP
+ WHERE char *SmtpAuthenticators INITVAL (NULL);
+Index: mutt-1.5.18/init.h
+===================================================================
+--- mutt-1.5.18.orig/init.h	2008-05-18 23:44:54.000000000 +0200
++++ mutt-1.5.18/init.h	2008-05-18 23:45:00.000000000 +0200
+@@ -2791,6 +2791,13 @@
+   ** Create a ``signin'' setting.  This will be preprended to ougoing 
+   ** messages right after the header.  Newlines may be included.
+   */
++  { "signoff",  DT_STR, R_NONE, UL &Signoff, 0},
++  /*
++  ** .pp
++  ** Create a ``signoff'' setting.  This will be appended to outgoing
++  ** messages, before the ``-- '' of any signatures.  If there is to
++  ** be a newline before the sigdashes, it must be included here.
++  */
+   { "simple_search",	DT_STR,	 R_NONE, UL &SimpleSearch, UL "~f %s | ~s %s" },
+   /*
+   ** .pp
+Index: mutt-1.5.18/send.c
+===================================================================
+--- mutt-1.5.18.orig/send.c	2008-05-18 23:44:54.000000000 +0200
++++ mutt-1.5.18/send.c	2008-05-18 23:45:00.000000000 +0200
+@@ -1450,6 +1450,9 @@
+ 	&& generate_body (tempfp, msg, flags, ctx, cur) == -1)
+       goto cleanup;
+ 
++    if (Signoff)
++      fputs (Signoff, tempfp);
++
+     if (!option (OPTSIGONTOP) && (! (flags & (SENDMAILX | SENDKEY)) && Editor && mutt_strcmp (Editor, "builtin") != 0))
+       append_signature (tempfp);
+ 

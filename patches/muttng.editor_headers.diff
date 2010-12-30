@@ -1,0 +1,283 @@
+Index: mutt-1.5.18/mutt.h
+===================================================================
+--- mutt-1.5.18.orig/mutt.h	2008-05-27 12:33:00.000000000 +0200
++++ mutt-1.5.18/mutt.h	2008-05-27 12:33:00.000000000 +0200
+@@ -463,6 +463,7 @@
+   OPTSORTRE,
+   OPTSPAMSEP,
+   OPTSTATUSONTOP,
++  OPTSTRICTMAILTO,
+   OPTSTRICTTHREADS,
+   OPTSTRIPWAS,
+   OPTSUSPEND,
+@@ -487,6 +488,7 @@
+   OPTWRAPSEARCH,
+   OPTWRITEBCC,		/* write out a bcc header? */
+   OPTXMAILER,
++  OPTXMAILTO,                   /* 1 if $edit_header is forcebly set */
+   OPTXTERMSETTITLES,	/* xterm titles patch */
+ 
+   OPTCRYPTUSEGPGME,
+@@ -586,6 +588,8 @@
+   struct list_t *next;
+ } LIST;
+ 
++typedef int list_lookup_t (const void*, const void*);
++
+ typedef struct rx_list_t
+ {
+   REGEXP *rx;
+@@ -613,6 +617,11 @@
+ LIST *mutt_add_list (LIST *, const char *);
+ LIST *mutt_add_list_n (LIST*, const void *, size_t);
+ 
++/* tokenize a string to a list */
++LIST * mutt_list_from_str(const char * str, const char * delim);
++
++int mutt_list_lookup(LIST * l, list_lookup_t * cmp, const void * p);
++
+ void mutt_init (int, LIST *);
+ 
+ typedef struct alias
+Index: mutt-1.5.18/muttlib.c
+===================================================================
+--- mutt-1.5.18.orig/muttlib.c	2008-05-27 12:32:58.000000000 +0200
++++ mutt-1.5.18/muttlib.c	2008-05-27 12:33:00.000000000 +0200
+@@ -266,6 +266,41 @@
+   }
+ }
+ 
++LIST * mutt_list_from_str(const char * str, const char * delim)
++{
++  LIST * ret = NULL;
++  char * tmp = NULL, * p = NULL;
++
++  if (!str || !*str || !delim || !*delim)
++    return (NULL);
++
++  tmp = strdup(str);
++  if (tmp) {
++    ret = mutt_new_list();
++    for (p = strtok (tmp, delim); p; p = strtok (NULL, delim)) {
++      char * x = strdup(p);
++      if (x) {
++        mutt_add_list(ret,x);
++      }
++    }
++    FREE(&tmp);
++  }
++  return ret;
++}
++
++int mutt_list_lookup(LIST * l, list_lookup_t * cmp, const void * p)
++{
++  int i = 0;
++  if (!l)
++    return (-1);
++  for (i = 0; l != NULL; i++, l = l->next) {
++    if (cmp (l->data, p) == 0) {
++      return (i);
++    }
++  }
++  return (-1);
++}
++
+ HEADER *mutt_dup_header(HEADER *h)
+ {
+   HEADER *hnew;
+Index: mutt-1.5.18/globals.h
+===================================================================
+--- mutt-1.5.18.orig/globals.h	2008-05-27 12:32:59.000000000 +0200
++++ mutt-1.5.18/globals.h	2008-05-27 12:33:00.000000000 +0200
+@@ -48,6 +48,7 @@
+ WHERE char *DsnNotify;
+ WHERE char *DsnReturn;
+ WHERE char *Editor;
++WHERE char *EditorHeaders;
+ WHERE char *EscChar;
+ WHERE char *FolderFormat;
+ WHERE char *ForwFmt;
+Index: mutt-1.5.18/init.h
+===================================================================
+--- mutt-1.5.18.orig/init.h	2008-05-27 12:33:00.000000000 +0200
++++ mutt-1.5.18/init.h	2008-05-27 12:33:00.000000000 +0200
+@@ -597,6 +597,21 @@
+   { "edit_hdrs",	DT_SYN,  R_NONE, UL "edit_headers", 0 },
+   /*
+   */  
++#ifdef USE_NNTP
++  {"editor_headers", DT_STR, R_NONE, UL &EditorHeaders, "From: To: Cc: Bcc: Subject: Reply-To: Newsgroups: Followup-To: X-Comment-To:" },
++#else
++  {"editor_headers", DT_STR, R_NONE, UL &EditorHeaders, "From: To: Cc: Bcc: Subject: Reply-To:" },
++#endif
++  /*
++   ** .pp
++   ** If $$edit_headers is \fIset\fP, this space-separated list specifies
++   ** which \fInon-empty\fP header fields to edit in addition to
++   ** user-defined headers.
++   **
++   ** .pp
++   ** Note: if $$edit_headers had to be turned on by force because
++   ** $$strict_mailto is \fIunset\fP, this option has no effect.
++   */
+   { "editor",		DT_PATH, R_NONE, UL &Editor, 0 },
+   /*
+   ** .pp
+@@ -3162,6 +3177,20 @@
+   ** Setting this variable causes the ``status bar'' to be displayed on
+   ** the first line of the screen rather than near the bottom.
+   */
++  {"strict_mailto", DT_BOOL, R_NONE, OPTSTRICTMAILTO, "yes" },
++  /*
++   **
++   ** .pp
++   ** With mailto: style links, a body as well as arbitrary header information
++   ** may be embedded. This may lead to (user) headers being overwriten without note
++   ** if ``$$edit_headers'' is unset.
++   **
++   ** .pp
++   ** If this variable is \fIset\fP, Mutt-ng is strict and allows anything to be
++   ** changed. If it's \fIunset\fP, all headers given will be prefixed with
++   ** ``X-Mailto-'' and the message including headers will be shown in the editor
++   ** regardless of what ``$$edit_headers'' is set to.
++   **/
+   { "strict_threads",	DT_BOOL, R_RESORT|R_RESORT_INIT|R_INDEX, OPTSTRICTTHREADS, 0 },
+   /*
+   ** .pp
+Index: mutt-1.5.18/sendlib.c
+===================================================================
+--- mutt-1.5.18.orig/sendlib.c	2008-05-19 09:14:35.000000000 +0200
++++ mutt-1.5.18/sendlib.c	2008-05-27 12:33:00.000000000 +0200
+@@ -1753,6 +1753,7 @@
+   char *p, *q;
+   LIST *tmp = env->userhdrs;
+   int has_agent = 0; /* user defined user-agent header field exists */
++  LIST* hdrs = mutt_list_from_str (EditorHeaders, " ");
+   
+ #ifdef USE_NNTP
+   if (!option (OPTNEWSSEND))
+@@ -1760,6 +1761,8 @@
+   if (mode == 0 && !privacy)
+     fputs (mutt_make_date (buffer, sizeof(buffer)), fp);
+ 
++#define EDIT_HEADER(x) (mode != 1 || option(OPTXMAILTO) || (mode == 1 && mutt_list_lookup(hdrs,(list_lookup_t*) ascii_strcasecmp,x) >= 0))
++
+   /* OPTUSEFROM is not consulted here so that we can still write a From:
+    * field if the user sets it with the `my_hdr' command
+    */
+@@ -1786,7 +1789,8 @@
+ #ifdef USE_NNTP
+   if (!option (OPTNEWSSEND))
+ #endif
+-    fputs ("To: \n", fp);
++    if (EDIT_HEADER("To:"))
++      fputs ("To: \n", fp);
+ 
+   if (env->cc)
+   {
+@@ -1797,7 +1801,8 @@
+ #ifdef USE_NNTP
+   if (!option (OPTNEWSSEND))
+ #endif
+-    fputs ("Cc: \n", fp);
++    if (EDIT_HEADER("Cc:"))
++      fputs ("Cc: \n", fp);
+ 
+   if (env->bcc)
+   {
+@@ -1811,28 +1816,29 @@
+ #ifdef USE_NNTP
+   if (!option (OPTNEWSSEND))
+ #endif
+-    fputs ("Bcc: \n", fp);
++    if (EDIT_HEADER("Bcc:"))
++      fputs ("Bcc: \n", fp);
+ 
+ #ifdef USE_NNTP
+   if (env->newsgroups)
+     fprintf (fp, "Newsgroups: %s\n", env->newsgroups);
+-  else if (mode == 1 && option (OPTNEWSSEND))
++  else if (mode == 1 && option (OPTNEWSSEND) && EDIT_HEADER("Newsgroups:"))
+     fputs ("Newsgroups: \n", fp);
+ 
+   if (env->followup_to)
+     fprintf (fp, "Followup-To: %s\n", env->followup_to);
+-  else if (mode == 1 && option (OPTNEWSSEND))
++  else if (mode == 1 && option (OPTNEWSSEND) && EDIT_HEADER("Followup-To:"))
+     fputs ("Followup-To: \n", fp);
+ 
+   if (env->x_comment_to)
+     fprintf (fp, "X-Comment-To: %s\n", env->x_comment_to);
+-  else if (mode == 1 && option (OPTNEWSSEND) && option (OPTXCOMMENTTO))
++  else if (mode == 1 && option (OPTNEWSSEND) && option (OPTXCOMMENTTO) && EDIT_HEADER("X-Comment-To:"))
+     fputs ("X-Comment-To: \n", fp);
+ #endif
+ 
+   if (env->subject)
+     mutt_write_one_header (fp, "Subject", env->subject, NULL, 0);
+-  else if (mode == 1)
++  else if (mode == 1 && EDIT_HEADER("Subject:"))
+     fputs ("Subject: \n", fp);
+ 
+   /* save message id if the user has set it */
+@@ -1844,7 +1850,7 @@
+     fputs ("Reply-To: ", fp);
+     mutt_write_address_list (env->reply_to, fp, 10, 0);
+   }
+-  else if (mode > 0)
++  else if (mode > 0 && EDIT_HEADER("Reply-To:"))
+     fputs ("Reply-To: \n", fp);
+ 
+   if (env->mail_followup_to)
+@@ -1876,6 +1882,8 @@
+     mutt_write_references (env->in_reply_to, fp);
+     fputc ('\n', fp);
+   }
++
++#undef EDIT_HEADER
+   
+   /* Add any user defined headers */
+   for (; tmp; tmp = tmp->next)
+@@ -1915,6 +1923,8 @@
+     fprintf (fp, "User-Agent: Mutt/%s-muttng (%s)\n", MUTT_VERSION, ReleaseDate);
+   }
+ 
++  mutt_free_list(&hdrs);
++
+   return (ferror (fp) == 0 ? 0 : -1);
+ }
+ 
+Index: mutt-1.5.18/url.c
+===================================================================
+--- mutt-1.5.18.orig/url.c	2008-05-19 09:14:35.000000000 +0200
++++ mutt-1.5.18/url.c	2008-05-27 12:33:38.000000000 +0200
+@@ -273,11 +273,19 @@
+     {
+       /* only try to parse if we can format it as header for
+        * mutt_parse_rfc822_line (tag fits in scratch) */
+-      snprintf (scratch, sizeof (scratch), "%s: %s", tag, value);
++#define SAVEPFX (option (OPTSTRICTMAILTO) ? "" : "X-Mailto-")
++      snprintf (scratch, sizeof (scratch), "%s%s: %s", SAVEPFX, tag, value);
++#undef SAVEPFX
+       scratch[taglen] = '\0';
+       value = &scratch[taglen+1];
+       SKIPWS (value);
+       mutt_parse_rfc822_line (e, NULL, scratch, value, 1, 0, 0, &last);
++      /* if $strict_mailto is set, force editing headers to let
++       * users have a look at what we got */
++      if (!option (OPTSTRICTMAILTO)) {
++        set_option (OPTXMAILTO);
++        set_option (OPTEDITHDRS);
++      }
+     }
+     else
+     {
+Index: mutt-1.5.18/PATCHES
+===================================================================
+--- mutt-1.5.18.orig/PATCHES	2008-05-27 12:33:00.000000000 +0200
++++ mutt-1.5.18/PATCHES	2008-05-27 12:33:00.000000000 +0200
+@@ -1,3 +1,4 @@
++muttng.editor_headers
+ muttng.abort_noattach
+ muttng.strip_was
+ muttng.agent_string

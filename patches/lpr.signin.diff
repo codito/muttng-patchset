@@ -1,0 +1,51 @@
+Index: mutt-1.5.18/PATCHES
+===================================================================
+--- mutt-1.5.18.orig/PATCHES	2008-05-18 23:44:30.000000000 +0200
++++ mutt-1.5.18/PATCHES	2008-05-18 23:44:54.000000000 +0200
+@@ -1,3 +1,4 @@
++patch-1.5.4.lpr.signin Lukas P. Ruf <lukas.ruf@lpr.ch>
+ patch-1.5.13.debian.compressed.2
+ patch-1.5.13.cd.source_multiple.2
+ patch-1.5.13.cd.purge_message.3.4
+Index: mutt-1.5.18/globals.h
+===================================================================
+--- mutt-1.5.18.orig/globals.h	2008-05-18 23:44:11.000000000 +0200
++++ mutt-1.5.18/globals.h	2008-05-18 23:44:54.000000000 +0200
+@@ -125,6 +125,7 @@
+ WHERE char *SendCharset;
+ WHERE char *Sendmail;
+ WHERE char *Shell;
++WHERE char *Signin;
+ WHERE char *Signature;
+ WHERE char *SimpleSearch;
+ #if USE_SMTP
+Index: mutt-1.5.18/init.h
+===================================================================
+--- mutt-1.5.18.orig/init.h	2008-05-18 23:44:30.000000000 +0200
++++ mutt-1.5.18/init.h	2008-05-18 23:44:54.000000000 +0200
+@@ -2785,6 +2785,12 @@
+   ** assumed that filename is a shell command and input should be read from
+   ** its stdout.
+   */
++  { "signin",	DT_STR, R_NONE, UL &Signin, 0},
++  /*
++  ** .pp
++  ** Create a ``signin'' setting.  This will be preprended to ougoing 
++  ** messages right after the header.  Newlines may be included.
++  */
+   { "simple_search",	DT_STR,	 R_NONE, UL &SimpleSearch, UL "~f %s | ~s %s" },
+   /*
+   ** .pp
+Index: mutt-1.5.18/send.c
+===================================================================
+--- mutt-1.5.18.orig/send.c	2008-05-18 23:43:59.000000000 +0200
++++ mutt-1.5.18/send.c	2008-05-18 23:44:54.000000000 +0200
+@@ -1439,6 +1439,8 @@
+     if (option (OPTHDRS))
+       process_user_header (msg->env);
+ 
++    if (Signin)
++      fputs(Signin, tempfp);
+ 
+     if (option (OPTSIGONTOP) && (! (flags & (SENDMAILX | SENDKEY)) && Editor && mutt_strcmp (Editor, "builtin") != 0))
+       append_signature (tempfp);

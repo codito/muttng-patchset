@@ -1,0 +1,96 @@
+Index: sidebar.c
+===================================================================
+--- sidebar.c.orig	2007-11-20 13:55:06.000000000 +0100
++++ sidebar.c	2007-11-20 13:59:59.000000000 +0100
+@@ -85,7 +85,7 @@
+ 	static char *entry = 0;
+ 	char *c;
+ 	int i = 0;
+-	int delim_len = strlen(SidebarDelim);
++	int delim_len = strlen(NONULL(SidebarDelim));
+ 
+ 	c = realloc(entry, SidebarWidth - delim_len + 2);
+ 	if ( c ) entry = c;
+@@ -132,7 +132,7 @@
+ #ifndef USE_SLANG_CURSES
+         attr_t attrs;
+ #endif
+-        short delim_len = strlen(SidebarDelim);
++        short delim_len = strlen(NONULL(SidebarDelim));
+         short color_pair;
+ 
+         static bool initialized = false;
+@@ -187,22 +187,26 @@
+     }
+ 
+         /* get attributes for divider */
+-	SETCOLOR(MT_COLOR_STATUS);
++	SETCOLOR(MT_COLOR_SIDEBAR);
+ #ifndef USE_SLANG_CURSES
+         attr_get(&attrs, &color_pair, 0);
+ #else
+         color_pair = attr_get();
+ #endif
+-	SETCOLOR(MT_COLOR_NORMAL);
++	/* SETCOLOR(MT_COLOR_SIDEBAR); */
+ 
+ 	/* draw the divider */
+ 
+ 	for ( ; lines < LINES-1-(menu != MENU_PAGER || option(OPTSTATUSONTOP)); lines++ ) {
+ 		move(lines, SidebarWidth - delim_len);
+-		addstr(NONULL(SidebarDelim));
+-#ifndef USE_SLANG_CURSES
+-                mvchgat(lines, SidebarWidth - delim_len, delim_len, 0, color_pair, NULL);
+-#endif
++		if (option (OPTASCIICHARS))
++			addstr (NONULL (SidebarDelim));
++		else if (!option (OPTASCIICHARS) && !strcmp (NONULL(SidebarDelim), "|"))
++			addch (ACS_VLINE);
++		else if ((Charset_is_utf8) && !strcmp (NONULL(SidebarDelim), "|"))
++			addstr ("\342\224\202");
++		else
++			addstr (NONULL (SidebarDelim));
+ 	}
+ 
+ 	if ( Incoming == 0 ) return 0;
+Index: color.c
+===================================================================
+--- color.c.orig	2007-11-20 13:55:06.000000000 +0100
++++ color.c	2007-11-20 13:59:59.000000000 +0100
+@@ -94,6 +94,7 @@
+   { "underline",	MT_COLOR_UNDERLINE },
+   { "index",		MT_COLOR_INDEX },
+   { "sidebar_new",	MT_COLOR_NEW },
++  { "sidebar",      MT_COLOR_SIDEBAR },
+   { NULL,		0 }
+ };
+ 
+@@ -143,6 +144,7 @@
+ 
+   /* set some defaults */
+   ColorDefs[MT_COLOR_STATUS] = A_REVERSE;
++  ColorDefs[MT_COLOR_SIDEBAR] = A_REVERSE;
+   ColorDefs[MT_COLOR_INDICATOR] = A_REVERSE;
+   ColorDefs[MT_COLOR_SEARCH] = A_REVERSE;
+   ColorDefs[MT_COLOR_MARKERS] = A_REVERSE;
+Index: mutt_curses.h
+===================================================================
+--- mutt_curses.h.orig	2007-11-20 13:55:06.000000000 +0100
++++ mutt_curses.h	2007-11-20 13:59:59.000000000 +0100
+@@ -125,6 +125,7 @@
+   MT_COLOR_ATTACHMENT,
+   MT_COLOR_SEARCH,
+   MT_COLOR_BOLD,
++  MT_COLOR_SIDEBAR,
+   MT_COLOR_UNDERLINE,
+   MT_COLOR_INDEX,
+   MT_COLOR_NEW,
+Index: PATCHES
+===================================================================
+--- PATCHES.orig	2007-11-20 13:59:50.000000000 +0100
++++ PATCHES	2007-11-20 13:59:59.000000000 +0100
+@@ -1,3 +1,4 @@
++nion.sidebar-color
+ ak.umask
+ patch-1.5.17.sidebar.20071102.txt
+ ak.fullname-scoring

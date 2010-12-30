@@ -1,0 +1,138 @@
+Index: mutt-1.5.18/mutt.h
+===================================================================
+--- mutt-1.5.18.orig/mutt.h	2008-05-18 23:46:00.000000000 +0200
++++ mutt-1.5.18/mutt.h	2008-05-18 23:50:28.000000000 +0200
+@@ -454,6 +454,7 @@
+   OPTSAVENAME,
+   OPTSCORE,
+   OPTSIDEBAR,
++  OPTSIDEBARSHORTEN,
+   OPTSIGDASHES,
+   OPTSIGONTOP,
+   OPTSORTRE,
+Index: mutt-1.5.18/sidebar.c
+===================================================================
+--- mutt-1.5.18.orig/sidebar.c	2008-05-18 23:50:22.000000000 +0200
++++ mutt-1.5.18/sidebar.c	2008-05-18 23:50:28.000000000 +0200
+@@ -125,10 +125,44 @@
+   }
+ }
+ 
++static char * find_next_after_delim(char * buf, char * delimchars) {
++	while (buf[0] != '\0' && strchr(delimchars,buf[0])==NULL)
++		++buf;
++	if (buf[0] == '\0')
++		return NULL;
++	return buf+1;
++}
++
++static char * sidebar_shorten_name(char * buf, size_t bufsize, char * boxname) {
++/* TODO: check bufsize!! */
++	char * p1, * p2;
++	buf[0] = '\0';
++	p1 = boxname;
++#ifdef USE_IMAP
++	p2 = find_next_after_delim(p1+1,ImapDelimChars);
++#else
++	p2 = find_next_after_delim(p1+1,".");
++#endif
++	while (p2) {
++		strncat(buf,p1,1);
++		strcat(buf,".");
++		p1 = p2;
++#ifdef USE_IMAP
++		p2 = find_next_after_delim(p1+1,ImapDelimChars);
++#else
++		p2 = find_next_after_delim(p1+1,".");
++#endif
++	}
++	strcat(buf,p1);
++	return buf;
++}
++
+ int draw_sidebar(int menu) {
+ 
+ 	int lines = option(OPTHELP) ? 1 : 0;
+ 	BUFFY *tmp;
++	char * box_name;
++	char shortened_boxname[SHORT_STRING];
+ #ifndef USE_SLANG_CURSES
+         attr_t attrs;
+ #endif
+@@ -233,8 +267,31 @@
+ 			tmp->msg_unread = Context->unread;
+ 			tmp->msgcount = Context->msgcount;
+ 		}
++
++		box_name = basename(tmp->path);
++
++#ifdef USE_IMAP
++#	define DELIM_CHARS ImapDelimChars
++#else
++#	define DELIM_CHARS "."
++#endif
++
++		if (SidebarRemovePrefix) {
++			if (strlen(box_name) > strlen(SidebarRemovePrefix) && 
++				strncmp(box_name,SidebarRemovePrefix,strlen(SidebarRemovePrefix))==0 &&
++				DELIM_CHARS && strchr(DELIM_CHARS,box_name[strlen(SidebarRemovePrefix)])!=NULL) {
++				box_name += strlen(SidebarRemovePrefix) + 1;
++			}
++		}
++
++#undef DELIM_CHARS
++
++		if (option(OPTSIDEBARSHORTEN)) {
++			box_name = sidebar_shorten_name(shortened_boxname,sizeof(shortened_boxname),box_name);
++		}
++
+                 printw( "%.*s", SidebarWidth - delim_len + 1,
+-                        make_sidebar_entry(basename(tmp->path), tmp->msgcount,
++                        make_sidebar_entry(box_name, tmp->msgcount,
+                         tmp->msg_unread));
+ 		lines++;
+ 	}
+Index: mutt-1.5.18/globals.h
+===================================================================
+--- mutt-1.5.18.orig/globals.h	2008-05-18 23:50:12.000000000 +0200
++++ mutt-1.5.18/globals.h	2008-05-18 23:50:28.000000000 +0200
+@@ -127,6 +127,7 @@
+ WHERE char *Sendmail;
+ WHERE char *Shell;
+ WHERE char *SidebarDelim;
++WHERE char *SidebarRemovePrefix;
+ WHERE char *Signin;
+ WHERE char *Signature;
+ WHERE char *Signoff;
+Index: mutt-1.5.18/init.h
+===================================================================
+--- mutt-1.5.18.orig/init.h	2008-05-18 23:50:12.000000000 +0200
++++ mutt-1.5.18/init.h	2008-05-18 23:50:28.000000000 +0200
+@@ -1720,6 +1720,18 @@
+   ** If ``no'', never attempt to verify cryptographic signatures.
+   ** (Crypto only)
+   */
++  { "sidebar_remove_prefix", DT_STR, R_BOTH, &SidebarRemovePrefix, 0 },
++  /*
++  ** .pp
++  ** If set, the prefix will be removed from the sidebar entry (if found).
++  */
++  { "sidebar_shorten_hierarchy", DT_BOOL, R_BOTH, OPTSIDEBARSHORTEN, 0 },
++  /*
++  ** .pp
++  ** If true, long box names will be shortened by hierarchy, e.g.
++  ** de.alt.sysadmin.recovery becomes d.a.s.recovery.
++  ** Useful for newsgroups.
++  */
+   { "smime_is_default", DT_BOOL,  R_NONE, OPTSMIMEISDEFAULT, 0},
+   /*
+   ** .pp
+Index: mutt-1.5.18/PATCHES
+===================================================================
+--- mutt-1.5.18.orig/PATCHES	2008-05-18 23:50:22.000000000 +0200
++++ mutt-1.5.18/PATCHES	2008-05-18 23:50:28.000000000 +0200
+@@ -1,3 +1,4 @@
++ak.sidebar-shortenname
+ nion.sidebar-next
+ nion.sidebar-color
+ ak.umask

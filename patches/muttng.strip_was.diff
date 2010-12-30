@@ -1,0 +1,92 @@
+Index: mutt-1.5.17/mutt.h
+===================================================================
+--- mutt-1.5.17.orig/mutt.h	2007-11-20 14:00:19.000000000 +0100
++++ mutt-1.5.17/mutt.h	2007-11-20 14:01:45.000000000 +0100
+@@ -463,6 +463,7 @@
+   OPTSPAMSEP,
+   OPTSTATUSONTOP,
+   OPTSTRICTTHREADS,
++  OPTSTRIPWAS,
+   OPTSUSPEND,
+   OPTTEXTFLOWED,
+   OPTTHOROUGHSRC,
+Index: mutt-1.5.17/mutt_regex.h
+===================================================================
+--- mutt-1.5.17.orig/mutt_regex.h	2007-03-02 19:44:44.000000000 +0100
++++ mutt-1.5.17/mutt_regex.h	2007-11-20 14:01:45.000000000 +0100
+@@ -51,5 +51,6 @@
+ WHERE REGEXP ReplyRegexp;
+ WHERE REGEXP Smileys;
+ WHERE REGEXP GecosMask;
++WHERE REGEXP StripWasRegexp;
+ 
+ #endif /* MUTT_REGEX_H */
+Index: mutt-1.5.17/init.h
+===================================================================
+--- mutt-1.5.17.orig/init.h	2007-11-20 14:01:38.000000000 +0100
++++ mutt-1.5.17/init.h	2007-11-20 14:01:45.000000000 +0100
+@@ -2962,6 +2962,20 @@
+   ** the message whether or not this is the case, as long as the
+   ** non-``$$reply_regexp'' parts of both messages are identical.
+   */
++  {"strip_was", DT_BOOL, R_NONE, OPTSTRIPWAS, "no" },
++  /**
++  ** .pp
++  ** When \fIset\fP, Mutt-ng will remove the trailing part of the ``\fTSubject:\fP''
++  ** line which matches $$strip_was_regex when replying. This is useful to
++  ** properly react on subject changes and reduce ``subject noise.'' (esp. in Usenet)
++  **/
++  {"strip_was_regex", DT_RX, R_NONE, UL &StripWasRegexp, "\\([Ww][Aa][RrSs]: .*\\)[ ]*$"},
++  /**
++  ** .pp
++  ** When non-empty and $$strip_was is \fIset\fP, Mutt-ng will remove this
++  ** trailing part of the ``Subject'' line when replying if it won't be empty
++  ** afterwards.
++  **/
+   { "spam_separator",   DT_STR, R_NONE, UL &SpamSep, UL "," },
+   /*
+   ** .pp
+Index: mutt-1.5.17/send.c
+===================================================================
+--- mutt-1.5.17.orig/send.c	2007-11-20 13:49:11.000000000 +0100
++++ mutt-1.5.17/send.c	2007-11-20 14:01:45.000000000 +0100
+@@ -222,6 +222,7 @@
+ {
+   char buf[HUGE_STRING];
+   LIST *uh = UserHeader;
++  regmatch_t pat_match[1];
+ 
+ #ifdef USE_NNTP
+   if (option (OPTNEWSSEND))
+@@ -286,6 +287,22 @@
+       }
+     }
+   }
++
++  if ((flags & (SENDREPLY)) && option (OPTSTRIPWAS) && StripWasRegexp.rx &&
++      regexec (StripWasRegexp.rx, buf, 1, pat_match, 0) == 0) {
++    unsigned int pos = pat_match->rm_so;
++
++    if (ascii_strncasecmp (buf, "re: ", pos) != 0) {
++      buf[pos] = '\0';          /* kill match */
++      while (pos-- && buf[pos] == ' ')
++        buf[pos] = '\0';        /* remove trailing spaces */
++    }
++    else {
++      mutt_error (_("Ignoring $strip_was: Subject would be empty."));
++      sleep (2);
++    }
++  }
++
+   
+   if (mutt_get_field ("Subject: ", buf, sizeof (buf), 0) != 0 ||
+       (!buf[0] && query_quadoption (OPT_SUBJECT, _("No subject, abort?")) != M_NO))
+Index: mutt-1.5.17/PATCHES
+===================================================================
+--- mutt-1.5.17.orig/PATCHES	2007-11-20 14:01:38.000000000 +0100
++++ mutt-1.5.17/PATCHES	2007-11-20 14:01:45.000000000 +0100
+@@ -1,3 +1,4 @@
++muttng.strip_was
+ muttng.agent_string
+ ca.cb.er.indexcolor
+ ak.sidebar-shortenname

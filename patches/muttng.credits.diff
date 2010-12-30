@@ -1,0 +1,52 @@
+Index: mutt-1.5.18/sendlib.c
+===================================================================
+--- mutt-1.5.18.orig/sendlib.c	2008-01-30 05:26:53.000000000 +0100
++++ mutt-1.5.18/sendlib.c	2008-05-18 23:41:35.000000000 +0200
+@@ -1876,7 +1876,7 @@
+   if (mode == 0 && !privacy && option (OPTXMAILER) && !has_agent)
+   {
+     /* Add a vanity header */
+-    fprintf (fp, "User-Agent: Mutt/%s (%s)\n", MUTT_VERSION, ReleaseDate);
++    fprintf (fp, "User-Agent: Mutt/%s-muttng (%s)\n", MUTT_VERSION, ReleaseDate);
+   }
+ 
+   return (ferror (fp) == 0 ? 0 : -1);
+Index: mutt-1.5.18/init.c
+===================================================================
+--- mutt-1.5.18.orig/init.c	2008-01-30 05:26:50.000000000 +0100
++++ mutt-1.5.18/init.c	2008-05-18 23:41:35.000000000 +0200
+@@ -2804,7 +2804,7 @@
+   {
+     t = time (0);
+     setbuf (debugfile, NULL); /* don't buffer the debugging output! */
+-    fprintf (debugfile, "Mutt %s started at %s.\nDebugging at level %d.\n\n",
++    fprintf (debugfile, "Mutt %s-muttng started at %s.\nDebugging at level %d.\n\n",
+ 	     MUTT_VERSION, asctime (localtime (&t)), debuglevel);
+   }
+ }
+Index: mutt-1.5.18/commands.c
+===================================================================
+--- mutt-1.5.18.orig/commands.c	2008-01-30 05:26:49.000000000 +0100
++++ mutt-1.5.18/commands.c	2008-05-18 23:41:35.000000000 +0200
+@@ -872,7 +872,7 @@
+ 
+ void mutt_version (void)
+ {
+-  mutt_message ("Mutt %s (%s)", MUTT_VERSION, ReleaseDate);
++  mutt_message ("Mutt %s-muttng (%s)", MUTT_VERSION, ReleaseDate);
+ }
+ 
+ void mutt_edit_content_type (HEADER *h, BODY *b, FILE *fp)
+Index: mutt-1.5.18/muttlib.c
+===================================================================
+--- mutt-1.5.18.orig/muttlib.c	2008-05-10 09:47:57.000000000 +0200
++++ mutt-1.5.18/muttlib.c	2008-05-18 23:41:35.000000000 +0200
+@@ -1705,7 +1705,7 @@
+ const char *mutt_make_version (void)
+ {
+   static char vstring[STRING];
+-  snprintf (vstring, sizeof (vstring), "Mutt %s (%s)",
++  snprintf (vstring, sizeof (vstring), "Mutt %s-muttng (%s)",
+ 	    MUTT_VERSION, ReleaseDate);
+   return vstring;
+ }

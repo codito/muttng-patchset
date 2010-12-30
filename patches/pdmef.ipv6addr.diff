@@ -1,0 +1,125 @@
+diff --git a/PATCHES b/PATCHES
+index e69de29..686444d 100644
+Index: mutt-1.5.18/PATCHES
+===================================================================
+--- mutt-1.5.18.orig/PATCHES	2008-05-18 23:45:23.000000000 +0200
++++ mutt-1.5.18/PATCHES	2008-05-18 23:45:29.000000000 +0200
+@@ -1,3 +1,4 @@
++patch-1.5.13.pdmef.ipv6addr.1
+ patch-1.5.13.pdmef.foldername.1
+ patch-1.5.13.pdmef.atoi.2
+ patch-1.5.13.muttng.xterm_title.2
+Index: mutt-1.5.18/imap/util.c
+===================================================================
+--- mutt-1.5.18.orig/imap/util.c	2008-01-30 05:26:50.000000000 +0100
++++ mutt-1.5.18/imap/util.c	2008-05-18 23:45:29.000000000 +0200
+@@ -167,7 +167,7 @@
+   char tmp[128];
+   ciss_url_t url;
+   char *c;
+-  int n;
++  int n = 0;
+ 
+   if (!ImapPort)
+   {
+@@ -231,8 +231,29 @@
+       strfcpy (tmp, c+1, sizeof (tmp));
+       mx->account.flags |= M_ACCT_USER;
+     }
+-  
+-    if ((n = sscanf (tmp, "%127[^:/]%127s", mx->account.host, tmp)) < 1)
++ 
++    /* if host starts with '[', assume raw IPv6 address */
++    if (tmp && *tmp == '[')
++    {
++      size_t l = mutt_strlen (tmp) - 2;
++      if ((c = strrchr (tmp, ']')))
++      {
++        /* let 'c' point to where we expect port to start or end */
++        *c++ = '\0';
++        /* skip '[' and ']' when copying IPv6 address (url_tostr adds them for printing) */
++        memcpy (mx->account.host, tmp+1,
++                c-tmp-2 > sizeof (mx->account.host) ? sizeof (mx->account.host) : c-tmp-2);
++      } else {
++        dprint (1, (debugfile, "imap_parse_path: invalid IPv6 address in %s\n", path));
++        FREE (&mx->mbox);
++        return -1;
++      }
++      /* move port fraction to start of 'tmp' and set n:=2 if we have more data */
++      memmove (tmp, c, sizeof (tmp) - l);
++      if (*tmp)
++        n = 2;
++    }
++    else if ((n = sscanf (tmp, "%127[^:/]%127s", mx->account.host, tmp)) < 1)
+     {
+       dprint (1, (debugfile, "imap_parse_path: NULL host in %s\n", path));
+       FREE (&mx->mbox);
+Index: mutt-1.5.18/url.c
+===================================================================
+--- mutt-1.5.18.orig/url.c	2008-05-18 23:42:31.000000000 +0200
++++ mutt-1.5.18/url.c	2008-05-18 23:45:29.000000000 +0200
+@@ -113,6 +113,7 @@
+   char *t;
+   char *p;
+   char *path;
++  size_t l;
+ 
+   ciss->user = NULL;
+   ciss->pass = NULL;
+@@ -143,16 +144,29 @@
+   else
+     t = src;
+   
+-  if ((p = strchr (t, ':')))
++  /* see if we either have ']' for IPv6 address or ':' for port */
++  if ((p = strchr (t, ']')) || (p = strchr (t, ':')))
+   {
+-    *p++ = '\0';
+-    ciss->port = atoi (p);
++    /* either we have p==':<port>' or p==']:<port>' */
++    if (*p == ':' || (*p == ']' && *(p+1) == ':' && p++))
++    {
++      *p++ = '\0';
++      ciss->port = atoi (p);
++    }
+   }
+   else
+     ciss->port = 0;
+-  
++
++  l = mutt_strlen (t);
++  /* for raw IPv6 addresses, skip '^[' and ']$' */
++  if (*t == '[' && l > 0 && t[l-1] == ']')
++  {
++    t[l-1] = '\0';
++    t++;
++  }
+   ciss->host = t;
+   url_pct_decode (ciss->host);
++
+   return path;
+ }
+ 
+@@ -178,6 +192,7 @@
+ int url_ciss_tostring (ciss_url_t* ciss, char* dest, size_t len, int flags)
+ {
+   long l;
++  unsigned short ipv6 = (ciss && ciss->host && strchr (ciss->host, ':'));
+ 
+   if (ciss->scheme == U_UNKNOWN)
+     return -1;
+@@ -199,10 +214,12 @@
+       len -= (l = strlen (dest)); dest += l;
+     }
+ 
++    /* for raw IPv6 addresses, re-add brackets */
+     if (ciss->port)
+-      snprintf (dest, len, "%s:%hu/", ciss->host, ciss->port);
++      snprintf (dest, len, "%s%s%s:%hu/",
++		ipv6 ? "[" : "", ciss->host, ipv6 ? "]" : "", ciss->port);
+     else
+-      snprintf (dest, len, "%s/", ciss->host);
++      snprintf (dest, len, "%s%s%s/", ipv6 ? "[" : "", ciss->host, ipv6 ? "]" : "");
+   }
+ 
+   if (ciss->path)

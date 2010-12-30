@@ -1,0 +1,180 @@
+diff --git a/PATCHES b/PATCHES
+index e69de29..23a1fd5 100644
+Index: mutt-1.5.18/PATCHES
+===================================================================
+--- mutt-1.5.18.orig/PATCHES	2008-05-18 23:45:09.000000000 +0200
++++ mutt-1.5.18/PATCHES	2008-05-18 23:45:17.000000000 +0200
+@@ -1,3 +1,4 @@
++patch-1.5.13.pdmef.atoi.2
+ patch-1.5.13.muttng.xterm_title.2
+ patch-1.5.4.lpr.signoff Lukas P. Ruf <lukas.ruf@lpr.ch>
+ patch-1.5.4.lpr.signin Lukas P. Ruf <lukas.ruf@lpr.ch>
+Index: mutt-1.5.18/curs_main.c
+===================================================================
+--- mutt-1.5.18.orig/curs_main.c	2008-05-18 23:45:09.000000000 +0200
++++ mutt-1.5.18/curs_main.c	2008-05-18 23:45:17.000000000 +0200
+@@ -906,13 +906,12 @@
+ 	    || !buf[0])
+ 	  break;
+ 
+-	if (! isdigit ((unsigned char) buf[0]))
++	if (mutt_atoi (buf, &i) < 0)
+ 	{
+ 	  mutt_error _("Argument must be a message number.");
+ 	  break;
+ 	}
+ 
+-	i = atoi (buf);
+ 	if (i > 0 && i <= Context->msgcount)
+ 	{
+ 	  for (j = i-1; j < Context->msgcount; j++)
+Index: mutt-1.5.18/hcache.c
+===================================================================
+--- mutt-1.5.18.orig/hcache.c	2008-05-17 19:57:46.000000000 +0200
++++ mutt-1.5.18/hcache.c	2008-05-18 23:45:17.000000000 +0200
+@@ -824,6 +824,7 @@
+ hcache_open_qdbm (struct header_cache* h, const char* path)
+ {
+   int    flags = VL_OWRITER | VL_OCREAT;
++  int pagesize;
+ 
+   if (option(OPTHCACHECOMPRESS))
+     flags |= VL_OZCOMP;
+@@ -870,6 +871,9 @@
+ {
+   int pagesize = atoi(HeaderCachePageSize) ? atoi(HeaderCachePageSize) : 16384;
+ 
++  if (mutt_atoi(HeaderCachePageSize, &pagesize) < 0 || pagesize <= 0)
++    pagesize = 16384;
++
+   h->db = gdbm_open((char *) path, pagesize, GDBM_WRCREAT, 00600, NULL);
+   if (h->db)
+     return 0;
+Index: mutt-1.5.18/lib.c
+===================================================================
+--- mutt-1.5.18.orig/lib.c	2008-01-30 05:26:50.000000000 +0100
++++ mutt-1.5.18/lib.c	2008-05-18 23:45:18.000000000 +0200
+@@ -944,3 +944,22 @@
+   
+   return sysexits_h[i].str;
+ }
++
++int mutt_atoi (const char *str, int *dst)
++{
++  int r;
++  int *res = dst ? dst : &r;
++  char *e = NULL;
++
++  /* no input: 0 */
++  if (!str || !*str)
++  {
++    *res = 0;
++    return 0;
++  }
++
++  *res = (int) strtol (str, &e, 10);
++  if (e && *e != '\0')
++    return -1;
++  return 0;
++}
+Index: mutt-1.5.18/lib.h
+===================================================================
+--- mutt-1.5.18.orig/lib.h	2008-01-30 05:26:50.000000000 +0100
++++ mutt-1.5.18/lib.h	2008-05-18 23:45:18.000000000 +0200
+@@ -154,6 +154,8 @@
+ char *safe_strncat (char *, size_t, const char *, size_t);
+ char *safe_strdup (const char *);
+ 
++int mutt_atoi (const char *, int *);
++
+ const char *mutt_stristr (const char *, const char *);
+ const char *mutt_basename (const char *);
+ 
+Index: mutt-1.5.18/main.c
+===================================================================
+--- mutt-1.5.18.orig/main.c	2008-05-18 23:45:09.000000000 +0200
++++ mutt-1.5.18/main.c	2008-05-18 23:45:18.000000000 +0200
+@@ -642,7 +642,11 @@
+ 
+       case 'd':
+ #ifdef DEBUG
+-	debuglevel = atoi (optarg);
++	if (mutt_atoi (optarg, &debuglevel) < 0 || debuglevel <= 0)
++	{
++	  fprintf (stderr, _("Error: value '%s' is invalid for -d.\n"), optarg);
++	  return 1;
++	}
+ 	printf (_("Debugging at level %d.\n"), debuglevel);
+ #else
+ 	printf _("DEBUG was not defined during compilation.  Ignored.\n");
+Index: mutt-1.5.18/menu.c
+===================================================================
+--- mutt-1.5.18.orig/menu.c	2008-01-30 05:26:50.000000000 +0100
++++ mutt-1.5.18/menu.c	2008-05-18 23:45:18.000000000 +0200
+@@ -424,8 +424,7 @@
+     buf[0] = 0;
+     if (mutt_get_field (_("Jump to: "), buf, sizeof (buf), 0) == 0 && buf[0])
+     {
+-      n = atoi (buf) - 1;
+-      if (n >= 0 && n < menu->max)
++      if (mutt_atoi (buf, &n) == 0 && n >= 0 && n < menu->max)
+       {
+ 	menu->current = n;
+ 	menu->redraw = REDRAW_MOTION;
+Index: mutt-1.5.18/parse.c
+===================================================================
+--- mutt-1.5.18.orig/parse.c	2008-05-18 23:42:31.000000000 +0200
++++ mutt-1.5.18/parse.c	2008-05-18 23:45:18.000000000 +0200
+@@ -659,8 +659,8 @@
+ 
+ #ifdef SUN_ATTACHMENT
+         if (mutt_get_parameter ("content-lines", new->parameter)) {
+-	  for (lines = atoi(mutt_get_parameter ("content-lines", new->parameter));
+-	       lines; lines-- )
++	  mutt_atoi (mutt_get_parameter ("content-lines", new->parameter), &lines);
++	  for ( ; lines; lines-- )
+ 	     if (ftello (fp) >= end_off || fgets (buffer, LONG_STRING, fp) == NULL)
+ 	       break;
+ 	}
+@@ -1023,7 +1023,7 @@
+       {
+ 	if (hdr)
+ 	{
+-	  if ((hdr->content->length = atoi (p)) < 0)
++	  if ((hdr->content->length = atol (p)) < 0)
+ 	    hdr->content->length = -1;
+ 	}
+ 	matched = 1;
+@@ -1095,13 +1095,11 @@
+     {
+       if (hdr)
+       {
+-	hdr->lines = atoi (p);
+-
+ 	/* 
+ 	 * HACK - mutt has, for a very short time, produced negative
+ 	 * Lines header values.  Ignore them. 
+ 	 */
+-	if (hdr->lines < 0)
++	if (mutt_atoi (p, &hdr->lines) < 0 || hdr->lines < 0)
+ 	  hdr->lines = 0;
+       }
+ 
+Index: mutt-1.5.18/score.c
+===================================================================
+--- mutt-1.5.18.orig/score.c	2008-01-28 03:20:25.000000000 +0100
++++ mutt-1.5.18/score.c	2008-05-18 23:45:18.000000000 +0200
+@@ -116,7 +116,12 @@
+     ptr->exact = 1;
+     pc++;
+   }
+-  ptr->val = atoi (pc);
++  if (mutt_atoi (pc, &ptr->val) < 0)
++  {
++    FREE (&pattern);
++    strfcpy (err->data, _("score: invalid number"), err->dsize);
++    return (-1);
++  }
+   set_option (OPTNEEDRESCORE);
+   return 0;
+ }

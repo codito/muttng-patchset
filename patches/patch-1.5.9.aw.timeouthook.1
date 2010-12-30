@@ -1,0 +1,105 @@
+Index: PATCHES
+===================================================================
+--- PATCHES.orig	2008-05-18 23:52:54.000000000 +0200
++++ PATCHES	2008-05-18 23:52:59.000000000 +0200
+@@ -1,3 +1,4 @@
++patch-1.5.9.aw.timeouthook.1
+ patch-1.5.9.aw.jumptagged.1
+ muttng.editor_headers
+ muttng.abort_noattach
+Index: curs_main.c
+===================================================================
+--- curs_main.c.orig	2008-05-18 23:52:54.000000000 +0200
++++ curs_main.c	2008-05-18 23:52:59.000000000 +0200
+@@ -656,8 +656,10 @@
+ 
+       dprint(4, (debugfile, "mutt_index_menu[%d]: Got op %d\n", __LINE__, op));
+ 
+-      if (op == -1)
++      if (op == -1) {
++        mutt_timeout_hook(".");
+ 	continue; /* either user abort or timeout */
++      }
+       
+       mutt_curs_set (1);
+       
+Index: hook.c
+===================================================================
+--- hook.c.orig	2008-05-18 23:44:30.000000000 +0200
++++ hook.c	2008-05-18 23:52:59.000000000 +0200
+@@ -139,7 +139,7 @@
+ 	ptr->rx.not == not &&
+ 	!mutt_strcmp (pattern.data, ptr->rx.pattern))
+     {
+-      if (data & (M_FOLDERHOOK | M_SENDHOOK | M_SEND2HOOK | M_MESSAGEHOOK | M_ACCOUNTHOOK | M_REPLYHOOK))
++      if (data & (M_FOLDERHOOK | M_SENDHOOK | M_SEND2HOOK | M_MESSAGEHOOK | M_ACCOUNTHOOK | M_REPLYHOOK | M_TIMEOUTHOOK))
+       {
+ 	/* these hooks allow multiple commands with the same
+ 	 * pattern, so if we've already seen this pattern/command pair, just
+@@ -504,3 +504,30 @@
+   FREE (&token.data);
+ }
+ #endif
++
++void mutt_timeout_hook (const char *chs)
++{
++  HOOK* hook;
++  BUFFER token;
++  BUFFER err;
++  char buf[STRING];
++
++  err.data = buf;
++  err.dsize = sizeof (buf);
++  memset (&token, 0, sizeof (token));
++
++  for (hook = Hooks; hook; hook = hook->next)
++  {
++    if (! (hook->command && (hook->type & M_TIMEOUTHOOK)))
++      continue;
++
++    if (mutt_parse_rc_line (hook->command, &token, &err) == -1)
++    {
++      FREE (&token.data);
++      mutt_error ("%s", err.data);
++      mutt_sleep (1);
++
++      return;
++    }
++  }
++}
+Index: init.h
+===================================================================
+--- init.h.orig	2008-05-18 23:50:53.000000000 +0200
++++ init.h	2008-05-18 23:52:59.000000000 +0200
+@@ -3652,6 +3652,7 @@
+   { "spam",		parse_spam_list,	M_SPAM },
+   { "nospam",		parse_spam_list,	M_NOSPAM },
+   { "subscribe",	parse_subscribe,	0 },
++  { "timeout-hook",	mutt_parse_hook,	M_TIMEOUTHOOK },
+   { "toggle",		parse_set,		M_SET_INV },
+   { "unalias",		parse_unalias,		0 },
+   { "unalternative_order",parse_unlist,		UL &AlternativeOrderList },
+Index: mutt.h
+===================================================================
+--- mutt.h.orig	2008-05-18 23:50:52.000000000 +0200
++++ mutt.h	2008-05-18 23:52:59.000000000 +0200
+@@ -166,6 +166,7 @@
+ #define M_APPENDHOOK	(1<<13)
+ #define M_CLOSEHOOK	(1<<14)
+ #endif
++#define M_TIMEOUTHOOK	(1<<15)
+ 
+ /* tree characters for linearize_tree and print_enriched_string */
+ #define M_TREE_LLCORNER		1
+Index: protos.h
+===================================================================
+--- protos.h.orig	2008-05-18 23:42:31.000000000 +0200
++++ protos.h	2008-05-18 23:52:59.000000000 +0200
+@@ -153,6 +153,7 @@
+ char *mutt_get_parameter (const char *, PARAMETER *);
+ char *mutt_crypt_hook (ADDRESS *);
+ char *mutt_make_date (char *, size_t);
++void mutt_timeout_hook (const char *);
+ 
+ const char *mutt_make_version (void);
+ 

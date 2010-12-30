@@ -1,0 +1,130 @@
+Index: sidebar.c
+===================================================================
+--- sidebar.c.orig	2008-05-18 23:50:18.000000000 +0200
++++ sidebar.c	2008-05-18 23:50:22.000000000 +0200
+@@ -262,8 +262,33 @@
+         }
+ }
+ 
++BUFFY * exist_next_new()
++{
++	BUFFY *tmp = CurBuffy;
++	if(tmp == NULL) return NULL;
++	while (tmp->next != NULL)
++	{
++		tmp = tmp->next;
++		if(tmp->msg_unread) return tmp;
++	}
++	return NULL;
++}
++
++BUFFY * exist_prev_new()
++{
++	BUFFY *tmp = CurBuffy;
++	if(tmp == NULL) return NULL;
++	while (tmp->prev != NULL)
++	{
++		tmp = tmp->prev;
++		if(tmp->msg_unread) return tmp;
++	}
++	return NULL;
++}
++
+ void scroll_sidebar(int op, int menu)
+ {
++	BUFFY *tmp;
+         if(!SidebarWidth) return;
+         if(!CurBuffy) return;
+ 
+@@ -272,10 +297,21 @@
+ 			if ( CurBuffy->next == NULL ) return;
+ 			CurBuffy = CurBuffy->next;
+ 			break;
++		case OP_SIDEBAR_NEXT_NEW:
++			if ( (tmp = exist_next_new()) == NULL)
++				return;
++			else CurBuffy = tmp;
++			break;
+ 		case OP_SIDEBAR_PREV:
+ 			if ( CurBuffy->prev == NULL ) return;
+ 			CurBuffy = CurBuffy->prev;
+ 			break;
++		 case OP_SIDEBAR_PREV_NEW:
++			if ( (tmp = exist_prev_new()) == NULL)
++				return;
++			else CurBuffy = tmp;
++			break;
++
+ 		case OP_SIDEBAR_SCROLL_UP:
+ 			CurBuffy = TopBuffy;
+ 			if ( CurBuffy != Incoming ) {
+Index: functions.h
+===================================================================
+--- functions.h.orig	2008-05-18 23:45:59.000000000 +0200
++++ functions.h	2008-05-18 23:50:22.000000000 +0200
+@@ -192,6 +192,8 @@
+  { "sidebar-scroll-down",	OP_SIDEBAR_SCROLL_DOWN, NULL },
+  { "sidebar-next",		OP_SIDEBAR_NEXT, NULL },
+  { "sidebar-prev",		OP_SIDEBAR_PREV, NULL },
++ { "sidebar-next-new", OP_SIDEBAR_NEXT_NEW, NULL},
++ { "sidebar-prev-new", OP_SIDEBAR_PREV_NEW, NULL},
+  { "sidebar-open",		OP_SIDEBAR_OPEN, NULL },
+   { NULL,			0,				NULL }
+ };
+@@ -306,6 +308,8 @@
+   { "sidebar-scroll-down",	OP_SIDEBAR_SCROLL_DOWN, NULL },
+   { "sidebar-next",	OP_SIDEBAR_NEXT, NULL },
+   { "sidebar-prev",	OP_SIDEBAR_PREV, NULL },
++  { "sidebar-next-new", OP_SIDEBAR_NEXT_NEW, NULL},
++  { "sidebar-prev-new", OP_SIDEBAR_PREV_NEW, NULL},
+   { "sidebar-open", OP_SIDEBAR_OPEN, NULL },
+   { NULL,		0,				NULL }
+ };
+Index: OPS
+===================================================================
+--- OPS.orig	2008-05-18 23:46:00.000000000 +0200
++++ OPS	2008-05-18 23:50:22.000000000 +0200
+@@ -201,5 +201,7 @@
+ OP_SIDEBAR_SCROLL_UP "scroll the mailbox pane up 1 page"
+ OP_SIDEBAR_SCROLL_DOWN "scroll the mailbox pane down 1 page"
+ OP_SIDEBAR_NEXT "go down to next mailbox"
++OP_SIDEBAR_NEXT_NEW "go down to next mailbox with new mail"
+ OP_SIDEBAR_PREV "go to previous mailbox"
++OP_SIDEBAR_PREV_NEW "go to previous mailbox with new mail"
+ OP_SIDEBAR_OPEN "open hilighted mailbox"
+Index: curs_main.c
+===================================================================
+--- curs_main.c.orig	2008-05-18 23:45:59.000000000 +0200
++++ curs_main.c	2008-05-18 23:50:22.000000000 +0200
+@@ -2484,6 +2484,8 @@
+       case OP_SIDEBAR_SCROLL_DOWN:
+       case OP_SIDEBAR_NEXT:
+       case OP_SIDEBAR_PREV:
++      case OP_SIDEBAR_NEXT_NEW:
++      case OP_SIDEBAR_PREV_NEW:
+         scroll_sidebar(op, menu->menu);
+         break;
+       default:
+Index: pager.c
+===================================================================
+--- pager.c.orig	2008-05-18 23:46:00.000000000 +0200
++++ pager.c	2008-05-18 23:50:22.000000000 +0200
+@@ -2763,7 +2763,9 @@
+       case OP_SIDEBAR_SCROLL_UP:
+       case OP_SIDEBAR_SCROLL_DOWN:
+       case OP_SIDEBAR_NEXT:
++      case OP_SIDEBAR_NEXT_NEW:
+       case OP_SIDEBAR_PREV:
++      case OP_SIDEBAR_PREV_NEW:
+ 	scroll_sidebar(ch, MENU_PAGER);
+  	break;
+ 
+Index: PATCHES
+===================================================================
+--- PATCHES.orig	2008-05-18 23:50:18.000000000 +0200
++++ PATCHES	2008-05-18 23:50:22.000000000 +0200
+@@ -1,3 +1,4 @@
++nion.sidebar-next
+ nion.sidebar-color
+ ak.umask
+ patch-1.5.17.sidebar.20071102.txt

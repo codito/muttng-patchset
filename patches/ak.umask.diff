@@ -1,0 +1,123 @@
+port of mutt-ng's umask option.
+
+From:  <>
+
+
+Index: mutt-1.5.18/globals.h
+===================================================================
+--- mutt-1.5.18.orig/globals.h	2008-05-18 23:45:59.000000000 +0200
++++ mutt-1.5.18/globals.h	2008-05-18 23:50:12.000000000 +0200
+@@ -225,6 +225,7 @@
+ WHERE short SleepTime INITVAL (1);
+ WHERE short TimeInc;
+ WHERE short Timeout;
++WHERE short Umask INITVAL(0077);
+ WHERE short Wrap;
+ WHERE short WriteInc;
+ 
+Index: mutt-1.5.18/init.c
+===================================================================
+--- mutt-1.5.18.orig/init.c	2008-05-18 23:44:18.000000000 +0200
++++ mutt-1.5.18/init.c	2008-05-18 23:50:12.000000000 +0200
+@@ -2095,7 +2095,11 @@
+ 	  val = *ptr < 0 ? -*ptr : 0;
+ 
+ 	/* user requested the value of this variable */
+-	snprintf (err->data, err->dsize, "%s=%d", MuttVars[idx].option, val);
++    if (strcmp(MuttVars[idx].option,"umask")==0) { /* XXX puke */
++      snprintf (err->data, err->dsize, "%s=%04o",MuttVars[idx].option, *ptr);
++    } else {
++      snprintf (err->data, err->dsize, "%s=%d", MuttVars[idx].option, val);
++	}
+ 	break;
+       }
+ 
+Index: mutt-1.5.18/init.h
+===================================================================
+--- mutt-1.5.18.orig/init.h	2008-05-18 23:45:59.000000000 +0200
++++ mutt-1.5.18/init.h	2008-05-18 23:50:12.000000000 +0200
+@@ -3227,6 +3227,12 @@
+   ** machine without having to enter a password.
+   */
+ #endif
++  {"umask", DT_NUM, R_NONE, UL &Umask, 0077 },
++  /*
++   ** .pp
++   ** This sets the umask that will be used by Mutt-ng when creating all
++   ** kinds of files. If \fIunset\fP, the default value is \fT077\fP.
++   */
+   { "use_8bitmime",	DT_BOOL, R_NONE, OPTUSE8BITMIME, 0 },
+   /*
+   ** .pp
+Index: mutt-1.5.18/lib.c
+===================================================================
+--- mutt-1.5.18.orig/lib.c	2008-05-18 23:45:18.000000000 +0200
++++ mutt-1.5.18/lib.c	2008-05-18 23:50:12.000000000 +0200
+@@ -51,6 +51,8 @@
+ #include "lib.h"
+ 
+ 
++extern short Umask;
++
+ static struct sysexits
+ {
+   int v;
+@@ -572,6 +574,7 @@
+   struct stat osb, nsb;
+   int fd;
+ 
++  umask(Umask);
+   if (flags & O_EXCL) 
+   {
+     char safe_file[_POSIX_PATH_MAX];
+@@ -613,6 +616,7 @@
+  */
+ FILE *safe_fopen (const char *path, const char *mode)
+ {
++  umask(Umask);
+   if (mode[0] == 'w')
+   {
+     int fd;
+Index: mutt-1.5.18/mh.c
+===================================================================
+--- mutt-1.5.18.orig/mh.c	2008-03-12 01:08:24.000000000 +0100
++++ mutt-1.5.18/mh.c	2008-05-18 23:50:12.000000000 +0200
+@@ -240,6 +240,7 @@
+   {
+     snprintf (path, _POSIX_PATH_MAX, "%s/.mutt-%s-%d-%d",
+ 	      dest->path, NONULL (Hostname), (int) getpid (), Counter++);
++	umask(Umask);
+     if ((fd = open (path, O_WRONLY | O_EXCL | O_CREAT, 0666)) == -1)
+     {
+       if (errno != EEXIST)
+@@ -1248,6 +1249,8 @@
+ 	      dest->path, subdir, time (NULL), (unsigned int)getpid (),
+ 	      Counter++, NONULL (Hostname), suffix);
+ 
++    umask(Umask);
++
+     dprint (2, (debugfile, "maildir_open_new_message (): Trying %s.\n",
+ 		path));
+ 
+Index: mutt-1.5.18/pgppubring.c
+===================================================================
+--- mutt-1.5.18.orig/pgppubring.c	2008-01-30 05:26:51.000000000 +0100
++++ mutt-1.5.18/pgppubring.c	2008-05-18 23:50:12.000000000 +0200
+@@ -51,6 +51,8 @@
+ extern char *optarg;
+ extern int optind;
+ 
++short Umask;                    /* dirty hack because we need Umask in lib.c but don't want globals.h there */
++
+ #include "sha1.h"
+ #include "md5.h"
+ #include "lib.h"
+Index: mutt-1.5.18/PATCHES
+===================================================================
+--- mutt-1.5.18.orig/PATCHES	2008-05-18 23:46:00.000000000 +0200
++++ mutt-1.5.18/PATCHES	2008-05-18 23:50:12.000000000 +0200
+@@ -1,3 +1,4 @@
++ak.umask
+ patch-1.5.17.sidebar.20071102.txt
+ ak.fullname-scoring
+ ak.msgid-format

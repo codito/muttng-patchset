@@ -1,0 +1,29 @@
+muttng.credits.diff
+vvv.nntp.diff
+aw.listreply.diff -p0
+cd.ifdef.diff
+cd.purge_message.diff
+cd.source_multiple.diff
+debian.compressed.diff
+lpr.signin.diff
+lpr.signoff.diff
+muttng.xterm_title.diff
+pdmef.atoi.diff
+pdmef.foldername.diff
+pdmef.ipv6addr.diff
+pdmef.last-folder.diff
+ak.rfc2047-fix.diff
+ak.msgid-format.diff
+ak.fullname-scoring.diff
+sidebar.diff
+ak.umask.diff
+nion.sidebar-color.diff -p0
+nion.sidebar-next.diff -p0
+ak.sidebar-shortenname.diff
+indexcolor.diff
+muttng.agent_string.diff
+muttng.strip_was.diff
+muttng.abort_noattach.diff
+muttng.editor_headers.diff
+patch-1.5.9.aw.jumptagged.1 -p0
+patch-1.5.9.aw.timeouthook.1 -p0

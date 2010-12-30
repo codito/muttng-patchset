@@ -1,0 +1,200 @@
+diff --git a/Makefile.am b/Makefile.am
+index e194705..06d1e5a 100644
+Index: mutt-1.5.18/Makefile.am
+===================================================================
+--- mutt-1.5.18.orig/Makefile.am	2008-05-18 23:44:30.000000000 +0200
++++ mutt-1.5.18/Makefile.am	2008-05-18 23:45:09.000000000 +0200
+@@ -29,7 +29,8 @@
+ 	score.c send.c sendlib.c signal.c sort.c \
+ 	status.c system.c thread.c charset.c history.c lib.c \
+ 	muttlib.c editmsg.c mbyte.c \
+-	url.c ascii.c mutt_idna.c crypt-mod.c crypt-mod.h
++	url.c ascii.c mutt_idna.c crypt-mod.c crypt-mod.h \
++	xterm.c
+ 
+ nodist_mutt_SOURCES = $(BUILT_SOURCES)
+ 
+@@ -71,7 +72,7 @@
+ 	README.SSL smime.h \
+ 	muttbug pgppacket.h depcomp ascii.h BEWARE PATCHES patchlist.sh \
+ 	ChangeLog ChangeLog.old mkchangelog.sh mutt_idna.h \
+-	snprintf.c regex.c crypt-gpgme.h hcachever.sh.in
++	snprintf.c regex.c crypt-gpgme.h hcachever.sh.in xterm.h
+ 
+ EXTRA_SCRIPTS = smime_keys
+ 
+Index: mutt-1.5.18/PATCHES
+===================================================================
+--- mutt-1.5.18.orig/PATCHES	2008-05-18 23:45:00.000000000 +0200
++++ mutt-1.5.18/PATCHES	2008-05-18 23:45:09.000000000 +0200
+@@ -1,3 +1,4 @@
++patch-1.5.13.muttng.xterm_title.2
+ patch-1.5.4.lpr.signoff Lukas P. Ruf <lukas.ruf@lpr.ch>
+ patch-1.5.4.lpr.signin Lukas P. Ruf <lukas.ruf@lpr.ch>
+ patch-1.5.13.debian.compressed.2
+Index: mutt-1.5.18/curs_main.c
+===================================================================
+--- mutt-1.5.18.orig/curs_main.c	2008-05-18 23:44:30.000000000 +0200
++++ mutt-1.5.18/curs_main.c	2008-05-18 23:45:09.000000000 +0200
+@@ -30,6 +30,7 @@
+ #include "sort.h"
+ #include "buffy.h"
+ #include "mx.h"
++#include "xterm.h"
+ 
+ #ifdef USE_POP
+ #include "pop.h"
+@@ -598,6 +599,16 @@
+ 	SETCOLOR (MT_COLOR_NORMAL);
+         BKGDSET (MT_COLOR_NORMAL);
+ 	menu->redraw &= ~REDRAW_STATUS;
++
++	/* xterm title patch */
++	if (option (OPTXTERMSETTITLES))
++	{
++	  menu_status_line (buf, sizeof (buf), menu, NONULL (XtermTitle));
++	  mutt_xterm_set_title (buf);
++	  menu_status_line (buf, sizeof (buf), menu, NONULL (XtermIcon));
++	  mutt_xterm_set_icon (buf);
++	}
++
+       }
+ 
+       menu->redraw = 0;
+Index: mutt-1.5.18/globals.h
+===================================================================
+--- mutt-1.5.18.orig/globals.h	2008-05-18 23:45:00.000000000 +0200
++++ mutt-1.5.18/globals.h	2008-05-18 23:45:09.000000000 +0200
+@@ -158,6 +158,10 @@
+ WHERE char *Username;
+ WHERE char *Visual;
+ 
++WHERE char *XtermTitle;
++WHERE char *XtermLeave;
++WHERE char *XtermIcon;
++
+ WHERE char *CurrentFolder;
+ WHERE char *LastFolder;
+ 
+Index: mutt-1.5.18/init.h
+===================================================================
+--- mutt-1.5.18.orig/init.h	2008-05-18 23:45:00.000000000 +0200
++++ mutt-1.5.18/init.h	2008-05-18 23:45:09.000000000 +0200
+@@ -3311,6 +3311,41 @@
+   ** option does nothing: mutt will never write out the BCC header
+   ** in this case.
+   */
++  {"xterm_icon", DT_STR, R_BOTH, UL &XtermIcon, UL "M%?n?AIL&ail?"},
++  /*
++   ** .pp
++   ** Controls the format of the X11 icon title, as long as $$xterm_set_titles
++   ** is \fIset\fP. This string is identical in formatting to the one used by
++   ** ``$$status_format''.
++   */
++  {"xterm_set_titles", DT_BOOL, R_BOTH, OPTXTERMSETTITLES, 0 },
++  /*
++   ** .pp
++   ** Controls whether Mutt-ng sets the xterm title bar and icon name
++   ** (as long as you're in an appropriate terminal). The default must
++   ** be \fIunset\fP to force in the validity checking.
++   */
++  {"xterm_leave", DT_STR, R_BOTH, UL &XtermLeave, UL "" },
++  /*
++   ** .pp
++   ** If $$xterm_set_titles is \fIset\fP, this string will be used to
++   ** set the title when leaving Mutt-ng. For terminal-based programs,
++   ** there's no easy and portable way to read the current title so Mutt-ng
++   ** cannot read it upon startup and restore it when exiting.
++   **
++   ** .pp
++   ** Based on the xterm FAQ, the following might work:
++   **
++   ** .pp
++   ** \fIset xterm_leave = "`test x$$$DISPLAY != x && xprop -id $$$WINDOWID | grep WM_NAME | cut -d '"' -f 2`"\fP
++   */
++  {"xterm_title", DT_STR, R_BOTH, UL &XtermTitle, UL "Mutt-ng with %?m?%m messages&no messages?%?n? [%n New]?"},
++  /*
++   ** .pp
++   ** Controls the format of the title bar of the xterm provided that
++   ** $$xterm_set_titles has been \fIset\fP. This string is identical in formatting
++   ** to the one used by ``$$status_format''.
++   */
+ #ifdef USE_NNTP
+   { "x_comment_to",   DT_BOOL, R_NONE, OPTXCOMMENTTO, 0 },
+   /*
+Index: mutt-1.5.18/main.c
+===================================================================
+--- mutt-1.5.18.orig/main.c	2008-05-18 23:44:30.000000000 +0200
++++ mutt-1.5.18/main.c	2008-05-18 23:45:09.000000000 +0200
+@@ -31,6 +31,7 @@
+ #include "url.h"
+ #include "mutt_crypt.h"
+ #include "mutt_idna.h"
++#include "xterm.h"
+ 
+ #ifdef USE_SASL
+ #include "mutt_sasl.h"
+@@ -1057,6 +1058,11 @@
+        || !explicit_folder)
+     {
+       mutt_index_menu ();
++
++      /* xterm title patch */
++      if (option (OPTXTERMSETTITLES))
++	mutt_xterm_set_title (NONULL (XtermLeave));
++
+       if (Context)
+ 	FREE (&Context);
+     }
+Index: mutt-1.5.18/mutt.h
+===================================================================
+--- mutt-1.5.18.orig/mutt.h	2008-05-18 23:44:30.000000000 +0200
++++ mutt-1.5.18/mutt.h	2008-05-18 23:45:09.000000000 +0200
+@@ -480,6 +480,7 @@
+   OPTWRAPSEARCH,
+   OPTWRITEBCC,		/* write out a bcc header? */
+   OPTXMAILER,
++  OPTXTERMSETTITLES,	/* xterm titles patch */
+ 
+   OPTCRYPTUSEGPGME,
+   OPTCRYPTUSEPKA,
+Index: mutt-1.5.18/xterm.c
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ mutt-1.5.18/xterm.c	2008-05-18 23:45:09.000000000 +0200
+@@ -0,0 +1,20 @@
++#include <stdio.h>
++
++#include "xterm.h"
++#include "lib.h"
++
++void mutt_xterm_set_title (char *title)
++{
++  fputs ("\033]2;", stdout);
++  fputs (NONULL (title), stdout);
++  fputs ("\007", stdout);
++  fflush (stdout);
++}
++
++void mutt_xterm_set_icon (char *name)
++{
++  fputs ("\033]1;", stdout);
++  fputs (NONULL (name), stdout);
++  fputs ("\007", stdout);
++  fflush (stdout);
++}
+Index: mutt-1.5.18/xterm.h
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ mutt-1.5.18/xterm.h	2008-05-18 23:45:09.000000000 +0200
+@@ -0,0 +1,10 @@
++#ifndef MUTT_XTERM_H
++#define MUTT_XTERM_H
++
++/* sets the current xterm's title */
++void mutt_xterm_set_title (char *title);
++
++/* sets the current xterm's icon */
++void mutt_xterm_set_icon (char *name);
++
++#endif /* !MUTT_XTERM_H */

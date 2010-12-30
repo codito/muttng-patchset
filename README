@@ -1,0 +1,31 @@
+This package is not maintained by Andreas any more.
+But some of us still use this package w/ Arch. See http://aur.archlinux.org/packages.php?ID=10892
+
+Old README Contents
+=====
+This is a collection of patches that extend mutt with a number of useful but so
+far unintegrated features. They have been collected from various sources from
+the internet, and are provided in a form that makes it possible for quilt to
+manage them.
+
+To use these patches with your local copy of the mutt source, do the
+following:
+
+svn co http://bereshit.synflood.at/svn/mutt-patches/trunk $CHECKOUTDIR (choose your own directory)
+
+Alternatively, you can also choose a branch that fits best your specific version.
+
+In the directory of the mutt source, do:
+ln -s $CHECKOUTDIR/patches patches
+
+Now you can use quilt to manage the patches.
+
+To apply all patches, simply type:
+quilt push -a
+
+Then rebuild to mutt build scripts:
+./prepare
+
+Then you're ready to configure and make mutt. Have fun!
+
+Contact: Andreas Krennmair <ak@synflood.at>

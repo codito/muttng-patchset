@@ -1,0 +1,96 @@
+Index: OPS
+===================================================================
+--- OPS.orig	2008-05-18 23:50:22.000000000 +0200
++++ OPS	2008-05-18 23:52:54.000000000 +0200
+@@ -124,10 +124,12 @@
+ OP_MAIN_NEXT_NEW "jump to the next new message"
+ OP_MAIN_NEXT_NEW_THEN_UNREAD "jump to the next new or unread message"
+ OP_MAIN_NEXT_SUBTHREAD "jump to the next subthread"
++OP_MAIN_NEXT_TAGGED "jump to the next tagged message"
+ OP_MAIN_NEXT_THREAD "jump to the next thread"
+ OP_MAIN_NEXT_UNDELETED "move to the next undeleted message"
+ OP_MAIN_NEXT_UNREAD "jump to the next unread message"
+ OP_MAIN_PARENT_MESSAGE "jump to parent message in thread"
++OP_MAIN_PREV_TAGGED "jump to previous tagged message"
+ OP_MAIN_PREV_THREAD "jump to previous thread"
+ OP_MAIN_PREV_SUBTHREAD "jump to previous subthread"
+ OP_MAIN_PREV_UNDELETED "move to the previous undeleted message"
+Index: PATCHES
+===================================================================
+--- PATCHES.orig	2008-05-18 23:50:53.000000000 +0200
++++ PATCHES	2008-05-18 23:52:54.000000000 +0200
+@@ -1,3 +1,4 @@
++patch-1.5.9.aw.jumptagged.1
+ muttng.editor_headers
+ muttng.abort_noattach
+ muttng.strip_was
+Index: curs_main.c
+===================================================================
+--- curs_main.c.orig	2008-05-18 23:50:22.000000000 +0200
++++ curs_main.c	2008-05-18 23:52:54.000000000 +0200
+@@ -1655,10 +1655,13 @@
+       case OP_MAIN_PREV_UNREAD:
+       case OP_MAIN_NEXT_NEW_THEN_UNREAD:
+       case OP_MAIN_PREV_NEW_THEN_UNREAD:
++      case OP_MAIN_NEXT_TAGGED:
++      case OP_MAIN_PREV_TAGGED:
+ 
+       {
+ 	int first_unread = -1;
+ 	int first_new    = -1;
++	int first_tagged = -1;
+ 	
+ 	CHECK_MSGCOUNT;
+         CHECK_VISIBLE;
+@@ -1668,7 +1671,7 @@
+ 	for (j = 0; j != Context->vcount; j++)
+ 	{
+ #define CURHDRi Context->hdrs[Context->v2r[i]] 
+-	  if (op == OP_MAIN_NEXT_NEW || op == OP_MAIN_NEXT_UNREAD || op == OP_MAIN_NEXT_NEW_THEN_UNREAD)
++	  if (op == OP_MAIN_NEXT_NEW || op == OP_MAIN_NEXT_UNREAD || op == OP_MAIN_NEXT_NEW_THEN_UNREAD || op == OP_MAIN_NEXT_TAGGED)
+ 	  {
+ 	    i++;
+ 	    if (i > Context->vcount - 1)
+@@ -1701,7 +1704,12 @@
+ 	    if ((!CURHDRi->old) && first_new == -1)
+ 	      first_new = i;
+ 	  }
+-	  
++
++	  if (CURHDRi->tagged && first_tagged == -1) {
++	    first_tagged = i;
++	    break;
++	  }
++
+ 	  if ((op == OP_MAIN_NEXT_UNREAD || op == OP_MAIN_PREV_UNREAD) &&
+ 	      first_unread != -1)
+ 	    break;
+@@ -1719,11 +1727,14 @@
+ 		  op == OP_MAIN_NEXT_NEW_THEN_UNREAD || op == OP_MAIN_PREV_NEW_THEN_UNREAD)
+ 		 && first_unread != -1)
+ 	  menu->current = first_unread;
++	else if ((op == OP_MAIN_NEXT_TAGGED || op == OP_MAIN_PREV_TAGGED)
++		 && first_tagged != -1)
++	  menu->current = first_tagged;
+ 
+ 	if (menu->current == -1)
+ 	{
+ 	  menu->current = menu->oldcurrent;
+-	  mutt_error ("%s%s.", (op == OP_MAIN_NEXT_NEW || op == OP_MAIN_PREV_NEW) ? _("No new messages") : _("No unread messages"),
++	  mutt_error ("%s%s.", (op == OP_MAIN_NEXT_NEW || op == OP_MAIN_PREV_NEW) ? _("No new messages") : (op == OP_MAIN_NEXT_TAGGED || op == OP_MAIN_PREV_TAGGED) ? _("No tagged messages") : _("No unread messages"),
+ 		      Context->pattern ? _(" in this limited view") : "");
+ 	}
+ 	else if (menu->menu == MENU_PAGER)
+Index: functions.h
+===================================================================
+--- functions.h.orig	2008-05-18 23:50:22.000000000 +0200
++++ functions.h	2008-05-18 23:52:54.000000000 +0200
+@@ -178,6 +178,8 @@
+   { "next-unread",		OP_MAIN_NEXT_UNREAD,		NULL },
+   { "previous-unread",		OP_MAIN_PREV_UNREAD,		NULL },
+   { "parent-message",		OP_MAIN_PARENT_MESSAGE,		NULL },
++  { "next-tagged",		OP_MAIN_NEXT_TAGGED,		NULL },
++  { "previous-tagged",		OP_MAIN_PREV_TAGGED,		NULL },
+ 
+ 
+   { "extract-keys",		OP_EXTRACT_KEYS,		"\013" },
